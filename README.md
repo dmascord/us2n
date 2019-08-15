@@ -81,5 +81,12 @@ $ nc <ESP32 Wifi IP> 8000
 ACME Instruments, C4, 122393-2, 10-0-1
 
 ```
-
+# Using socat to bridge back to a tty
+```bash
+$ socat pty,link=$HOME/dev/ttyV0,b9600,waitslave tcp:<ESP32 Wifi IP>:8000
+```
+# Connect to the virtual tty with miniterm.py
+```bash
+$ miniterm.py dev/ttyV0 9600
+```
 That's all folks!
