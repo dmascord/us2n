@@ -15,7 +15,7 @@ Then...
 $ git clone git@github.com/tiagocoutinho/us2n
 ```
 
-* Create a file called `us2n.json` with a json configuration:
+* Create a file called `us2n.json` with a json configuration for Hardware UART:
 
 ```python
 
@@ -36,6 +36,47 @@ config = {
                 "bind": ["", 8000],
             },
             "uart": {
+                "port": 1,
+                "baudrate": 9600,
+                "bits": 8,
+                "parity": None,
+                "stop": 1,
+            },
+        },
+    ],
+}
+
+with open('us2n.json', 'w') as f:
+    json.dump(config, f)
+
+```
+
+* Or, create a file called `us2n.json` with a json configuration for SoftUART:
+
+```python
+
+import json
+
+config = {
+    "name": "SuperESP32",
+    "verbose": False,
+    "wlan": {
+        "sta": {
+            "essid": "<name of your access point>",
+            "password": "<password of your access point>",
+        },
+    },
+    "bridges": [
+        {
+            "tcp": {
+                "bind": ["", 8000],
+            },
+            "uart": {
+                "type": "SoftUART",
+                "tx": 12,
+                "rx": 14,
+                "timeout": 20,
+                "timeout_char": 10,
                 "port": 1,
                 "baudrate": 9600,
                 "bits": 8,
@@ -81,11 +122,11 @@ $ nc <ESP8266/ESP32 Wifi IP> 8000
 ACME Instruments, C4, 122393-2, 10-0-1
 
 ```
-# Using socat to bridge back to a tty
+* Using socat to bridge back to a tty
 ```bash
 $ socat pty,link=$HOME/dev/ttyV0,b9600,waitslave tcp:<ESP8266/ESP32 Wifi IP>:8000
 ```
-# Connect to the virtual tty with miniterm.py
+* Connect to the virtual tty with miniterm.py
 ```bash
 $ miniterm.py dev/ttyV0 9600
 ```
