@@ -1,11 +1,11 @@
-# micropython ESP32 UART to TCP bridge
+# micropython ESP8266/ESP32 UART to TCP bridge
 
-A micropython server running on an ESP32 which acts as a bridge
+A micropython server running on an ESP8266/ESP32 which acts as a bridge
 between UART and TCP (LAN/WLAN).
 
 ## Installation
 
-Follow steps to install *esptool* and *micropython for ESP32*.
+Follow steps to install *esptool* and *micropython for ESP8266/ESP32*.
 
 Then...
 
@@ -59,11 +59,11 @@ server = us2n.server()
 server.serve_forever()
 ```
 
-* Load the newly created `us2n.json` to your ESP32
+* Load the newly created `us2n.json` to your ESP8266/ESP32
 
-* Load `us2n.py` to your ESP32
+* Load `us2n.py` to your ESP8266/ESP32
 
-* Load `main.py` to your ESP32
+* Load `main.py` to your ESP8266/ESP32
 
 * Press reset
 
@@ -72,18 +72,18 @@ The server board should be ready to accept requests in a few seconds.
 
 ## Usage
 
-Now, if, for example, your ESP32 UART is connected to a SCPI device,
+Now, if, for example, your ESP8266/ESP32 UART is connected to a SCPI device,
 you can, from any PC:
 
 ```bash
-$ nc <ESP32 Wifi IP> 8000
+$ nc <ESP8266/ESP32 Wifi IP> 8000
 *IDN?
 ACME Instruments, C4, 122393-2, 10-0-1
 
 ```
 # Using socat to bridge back to a tty
 ```bash
-$ socat pty,link=$HOME/dev/ttyV0,b9600,waitslave tcp:<ESP32 Wifi IP>:8000
+$ socat pty,link=$HOME/dev/ttyV0,b9600,waitslave tcp:<ESP8266/ESP32 Wifi IP>:8000
 ```
 # Connect to the virtual tty with miniterm.py
 ```bash
