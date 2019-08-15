@@ -35,9 +35,15 @@ def parse_bind_address(addr, default=None):
 
 def UART(config):
     config = dict(config)
+    uart_type = config.pop('type')
     port = config.pop('port')
-    uart = machine.UART(port)
-    uart.init(**config)
+    if uart_type == 'SoftUART':
+        print('Using SoftUART...')
+        uart = machine.SoftUART(machine.Pin(config.pop('tx')),machine.Pin(config.pop('rx')),timeout=config.pop('timeout'),timeout_char=config.pop('timeout_char'),baudrate=config.pop('baudrate'))
+    else:
+        print('Using HW UART...')
+        uart = machine.UART(port)
+        uart.init(**config)
     return uart
 
 
@@ -104,9 +110,10 @@ class Bridge:
             self.uart = None
 
     def open_client(self):
+        print('Accepted connection from ', self.client_address)
         self.uart = UART(self.config['uart'])
         self.client, self.client_address = self.tcp.accept()
-        print('Accepted connection from ', self.client_address)
+        print('UART opened ', self.uart)
 
     def close(self):
         self.close_client()
