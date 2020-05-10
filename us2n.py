@@ -35,7 +35,7 @@ def parse_bind_address(addr, default=None):
 
 def UART(config):
     config = dict(config)
-    uart_type = config.pop('type')
+    uart_type = config.pop('type') if 'type' in config.keys() else 'hw'
     port = config.pop('port')
     if uart_type == 'SoftUART':
         print('Using SoftUART...')
