@@ -51,6 +51,8 @@ with open('us2n.json', 'w') as f:
 
 ```
 
+**Note: if you are running us2n on an ESP32, specifying rx and tx pins is supported on hardware UART.**
+
 * Or, create a file called `us2n.json` with a json configuration for SoftUART:
 
 ```python
