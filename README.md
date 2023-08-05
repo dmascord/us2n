@@ -15,6 +15,8 @@ Then...
 $ git clone git@github.com/tiagocoutinho/us2n
 ```
 
+### Configuration
+
 * Create a file called `us2n.json` with a json configuration for Hardware UART:
 
 ```python
@@ -93,6 +95,18 @@ with open('us2n.json', 'w') as f:
     json.dump(config, f)
 
 ```
+
+You can also enable password authentication on connection by adding this under a bridge:
+
+```
+
+"auth": {
+    "password": "<password prompted on connection>",
+},
+
+```
+
+### Running
 
 * Include in your `main.py`:
 

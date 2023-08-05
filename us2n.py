@@ -87,17 +87,36 @@ class Bridge:
         elif fd == self.client:
             data = self.client.recv(4096)
             if data:
-                print('TCP({0})->UART({1}) {2}'.format(self.bind_port,
-                                                       self.uart_port, data))
-                self.uart.write(data)
+                if self.state == 'enterpassword':
+                    while len(data):
+                        c = data[0:1]
+                        data = data[1:]
+                        if c == b'\n' or c == b'\r':
+                            print("Received password {0}".format(self.password))
+                            if self.password.decode('utf-8') == self.config['auth']['password']:
+                                self.client.sendall("\r\nAuthentication succeeded\r\n")
+                                self.state = 'authenticated'
+                                break
+                            else:
+                                self.password = b""
+                                self.client.sendall("\r\nAuthentication failed\r\npassword: ")
+                        else:
+                                self.password += c
+                if self.state == 'authenticated':
+                    print('TCP({0})->UART({1}) {2}'.format(self.bind_port,
+                                                           self.uart_port, data))
+                    self.uart.write(data)
             else:
                 print('Client ', self.client_address, ' disconnected')
                 self.close_client()
         elif fd == self.uart:
             data = self.uart.read()
-            print('UART({0})->TCP({1}) {2}'.format(self.uart_port,
-                                                   self.bind_port, data))
-            self.client.sendall(data)
+            if self.state == 'authenticated':
+                print('UART({0})->TCP({1}) {2}'.format(self.uart_port,
+                                                       self.bind_port, data))
+                self.client.sendall(data)
+            else:
+                print("Ignoring UART data, not authenticated")
 
     def close_client(self):
         if self.client is not None:
@@ -114,6 +133,11 @@ class Bridge:
         self.uart = UART(self.config['uart'])
         self.client, self.client_address = self.tcp.accept()
         print('UART opened ', self.uart)
+        self.state = 'enterpassword' if 'auth' in self.config else 'authenticated'
+        self.password = b""
+        if self.state == 'enterpassword':
+            self.client.sendall("password: ")
+            print("Prompting for password")
 
     def close(self):
         self.close_client()
