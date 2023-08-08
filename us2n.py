@@ -111,12 +111,13 @@ class Bridge:
                 self.close_client()
         elif fd == self.uart:
             data = self.uart.read()
-            if self.state == 'authenticated':
-                print('UART({0})->TCP({1}) {2}'.format(self.uart_port,
-                                                       self.bind_port, data))
-                self.client.sendall(data)
-            else:
-                print("Ignoring UART data, not authenticated")
+            if data is not None:
+                if self.state == 'authenticated':
+                    print('UART({0})->TCP({1}) {2}'.format(self.uart_port,
+                                                           self.bind_port, data))
+                    self.client.sendall(data)
+                else:
+                    print("Ignoring UART data, not authenticated")
 
     def close_client(self):
         if self.client is not None:
@@ -153,10 +154,15 @@ class S2NServer:
         self.config = config
 
     def serve_forever(self):
-        try:
-            self._serve_forever()
-        except KeyboardInterrupt:
-            print('Ctrl-C pressed. Bailing out')
+        while True:
+            config_network(self.config.get('wlan'), self.config.get('name'))
+            try:
+                self._serve_forever()
+            except KeyboardInterrupt:
+                print('Ctrl-C pressed. Bailing out')
+                break
+            except OSError as e:
+                print(f'OSError: {e}')
 
     def bind(self):
         bridges = []
@@ -177,7 +183,7 @@ class S2NServer:
                 rlist, _, xlist = select.select(fds, (), fds)
                 if xlist:
                     print('Errors. bailing out')
-                    continue
+                    break
                 for fd in rlist:
                     for bridge in bridges:
                         bridge.handle(fd)
@@ -201,18 +207,25 @@ def config_wlan(config, name):
 def WLANStation(config, name):
     if config is None:
         return
+    config.setdefault('connection_attempts', -1)
     essid = config['essid']
     password = config['password']
+    attempts_left = config['connection_attempts']
     sta = network.WLAN(network.STA_IF)
 
     if not sta.isconnected():
-        sta.active(True)
-        sta.connect(essid, password)
-        n, ms = 20, 250
-        t = n*ms
-        while not sta.isconnected() and n > 0:
-            time.sleep_ms(ms)
-            n -= 1
+        while not sta.isconnected() and attempts_left != 0:
+            attempts_left -= 1
+            sta.disconnect()
+            sta.active(False)
+            sta.active(True)
+            sta.connect(essid, password)
+            print('Connecting to WiFi...')
+            n, ms = 20, 250
+            t = n*ms
+            while not sta.isconnected() and n > 0:
+                time.sleep_ms(ms)
+                n -= 1
         if not sta.isconnected():
             print('Failed to connect wifi station after {0}ms. I give up'
                   .format(t))
@@ -270,5 +283,4 @@ def server(config_filename='us2n.json'):
     config_verbosity(config)
     print(50*'=')
     print('Welcome to ESP8266/32 serial <-> tcp bridge\n')
-    config_network(config.get('wlan'), name)
     return S2NServer(config)
