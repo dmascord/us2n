@@ -118,6 +118,9 @@ server = us2n.server()
 server.serve_forever()
 ```
 
+An example `main.py` for the RPi Pico is included as `picomain.py`, which
+waits for 5 seconds and unless BOOTSEL is pressed, the server is started.
+
 * Load the newly created `us2n.json` to your MCU (ESP8266/ESP32/RPi Pico)
 
 * Load `us2n.py` to your MCU
