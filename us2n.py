@@ -162,7 +162,9 @@ class S2NServer:
                 print('Ctrl-C pressed. Bailing out')
                 break
             except OSError as e:
-                print(f'OSError: {e}')
+                import sys
+                sys.print_exception(e)
+                time.sleep(1)
 
     def bind(self):
         bridges = []
