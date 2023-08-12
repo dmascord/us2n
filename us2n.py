@@ -69,6 +69,20 @@ class Bridge:
         print('Bridge listening at TCP({0}) for UART({1})'
               .format(self.bind_port, self.uart_port))
         self.tcp = tcp
+        if 'ssl' in self.config:
+            import ntptime
+            ntptime.host = "pool.ntp.org"
+            while True:
+                try:
+                    ntptime.settime()
+                except OSError as e:
+                    print(f"NTP synchronization failed, {e}")
+                    time.sleep(15)
+                    continue
+                print(f"NTP synchronization succeeded, {time.time()}")
+                print(time.gmtime())
+                break
+
         return tcp
 
     def fill(self, fds):
@@ -80,12 +94,27 @@ class Bridge:
             fds.append(self.client)
         return fds
 
+    def recv(self, sock, n):
+        if hasattr(sock, 'recv'):
+            return sock.recv(n)
+        else:
+            # SSL-wrapped sockets don't have recv(), use read() instead
+            # TODO: Read more than 1 byte? Probably needs non-blocking sockets
+            return sock.read(1)
+
+    def sendall(self, sock, bytes):
+        if hasattr(sock, 'sendall'):
+            return sock.sendall(bytes)
+        else:
+            # SSL-wrapped sockets don't have sendall(), use write() instead
+            return sock.write(bytes)
+
     def handle(self, fd):
         if fd == self.tcp:
             self.close_client()
             self.open_client()
         elif fd == self.client:
-            data = self.client.recv(4096)
+            data = self.recv(self.client, 4096)
             if data:
                 if self.state == 'enterpassword':
                     while len(data):
@@ -94,12 +123,12 @@ class Bridge:
                         if c == b'\n' or c == b'\r':
                             print("Received password {0}".format(self.password))
                             if self.password.decode('utf-8') == self.config['auth']['password']:
-                                self.client.sendall("\r\nAuthentication succeeded\r\n")
+                                self.sendall(self.client, "\r\nAuthentication succeeded\r\n")
                                 self.state = 'authenticated'
                                 break
                             else:
                                 self.password = b""
-                                self.client.sendall("\r\nAuthentication failed\r\npassword: ")
+                                self.sendall(self.client, "\r\nAuthentication failed\r\npassword: ")
                         else:
                                 self.password += c
                 if self.state == 'authenticated':
@@ -115,7 +144,7 @@ class Bridge:
                 if self.state == 'authenticated':
                     print('UART({0})->TCP({1}) {2}'.format(self.uart_port,
                                                            self.bind_port, data))
-                    self.client.sendall(data)
+                    self.sendall(self.client, data)
                 else:
                     print("Ignoring UART data, not authenticated")
 
@@ -130,14 +159,27 @@ class Bridge:
             self.uart = None
 
     def open_client(self):
+        self.client, self.client_address = self.tcp.accept()
         print('Accepted connection from ', self.client_address)
         self.uart = UART(self.config['uart'])
-        self.client, self.client_address = self.tcp.accept()
+        if 'ssl' in self.config:
+            import ussl
+            import ubinascii
+            print(time.gmtime())
+            sslconf = self.config['ssl'].copy()
+            for key in ['cadata', 'key', 'cert']:
+                if key in sslconf:
+                    with open(sslconf[key], "rb") as file:
+                        sslconf[key] = file.read()
+            # TODO: Setting CERT_REQUIRED produces MBEDTLS_ERR_X509_CERT_VERIFY_FAILED
+            sslconf['cert_reqs'] = ussl.CERT_OPTIONAL
+            self.client = ussl.wrap_socket(self.client, server_side=True, **sslconf)
         print('UART opened ', self.uart)
+        print(self.config)
         self.state = 'enterpassword' if 'auth' in self.config else 'authenticated'
         self.password = b""
         if self.state == 'enterpassword':
-            self.client.sendall("password: ")
+            self.sendall(self.client, "password: ")
             print("Prompting for password")
 
     def close(self):

@@ -98,6 +98,8 @@ with open('us2n.json', 'w') as f:
 
 ```
 
+#### Password authentication
+
 You can also enable password authentication on connection by adding this under a bridge:
 
 ```
@@ -107,6 +109,34 @@ You can also enable password authentication on connection by adding this under a
 },
 
 ```
+
+#### SSL
+
+SSL can be enabled by adding this under a bridge:
+
+```
+
+"ssl": {
+    "server_hostname": "<hostname>",
+    "key": "/server.key.der"
+    "cert": "/server.crt.der",
+    "cadata": "/client.crt.der"
+}
+
+```
+
+The keys and certificates can be generated via `gencerts.sh`.
+hostname should match the hostname that socat connects to and this also needs to match
+the CN of the server certificate.
+
+This is tested on the RPi Pico. There are indications that the arguments to
+ussl.wrap\_socket may vary depending on micropython implementation, as these are not the
+arguments that are documented elsewhere; instead of key and cert, keyfile and certfile
+might be needed on other systems. key, cert and cadata are loaded from files, no such
+handling excepts for other argument names
+
+So, look up and experiment with what arguments that ussl.wrap\_socket has on your
+particular micropython implementation.
 
 ### Running
 
@@ -151,4 +181,28 @@ $ socat pty,link=$HOME/dev/ttyV0,b9600,waitslave tcp:<MCU Wifi IP>:8000
 ```bash
 $ miniterm.py dev/ttyV0 9600
 ```
-That's all folks!
+Or use screen!
+```bash
+$ screen dev/ttyV0 9600
+```
+That's all folks! Unless you want SSL:
+
+## SSL usage
+
+You can test the connection via openssl's s\_client:
+
+```bash
+$ openssl s_client -connect rn102-picow:8000 -cert client.pem -CAfile server.crt
+```
+
+But to get a proper tty, use socat:
+
+```bash
+$ socat pty,link=$HOME/dev/ttyV0,b9600,waitslave tcp:<MCU CN>:8000,cert=client.pem,cafile=server.crt
+```
+
+Then use miniterm.py or screen as before.
+
+Note that the IP/hostname that you use to connect to the MCU needs to match the server
+certificate's CN, although this can be turned off by adding ```,verify=0```.
+
