@@ -195,6 +195,22 @@ class S2NServer:
     def __init__(self, config):
         self.config = config
 
+    def report_exception(self, e):
+        if 'syslog' in self.config:
+            try:
+                import usyslog
+                import io
+                import sys
+                stringio = io.StringIO()
+                sys.print_exception(e, stringio)
+                stringio.seek(0)
+                e_string = stringio.read()
+                s = usyslog.UDPClient(**self.config['syslog'])
+                s.error(e_string)
+                s.close()
+            except BaseException as e2:
+                sys.print_exception(e2)
+
     def serve_forever(self):
         while True:
             config_network(self.config.get('wlan'), self.config.get('name'))
@@ -203,10 +219,12 @@ class S2NServer:
             except KeyboardInterrupt:
                 print('Ctrl-C pressed. Bailing out')
                 break
-            except OSError as e:
+            except BaseException as e:
                 import sys
                 sys.print_exception(e)
+                self.report_exception(e)
                 time.sleep(1)
+                print("Restarting")
 
     def bind(self):
         bridges = []
