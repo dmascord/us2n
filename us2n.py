@@ -32,6 +32,72 @@ def parse_bind_address(addr, default=None):
     port = int(args[1])
     return host, port
 
+class RINGBUFFER:
+    def __init__(self, size):
+        self.data = bytearray(size)
+        self.size = size
+        self.index_put = 0
+        self.index_get = 0
+        self.index_rewind = 0
+        self.wrapped = False
+
+    def put(self, data):
+        cur_idx = 0
+        while cur_idx < len(data):
+            min_idx = min(self.index_put+len(data)-cur_idx, self.size)
+            self.data[self.index_put:min_idx] = data[cur_idx:min_idx-self.index_put+cur_idx]
+            cur_idx += min_idx-self.index_put
+            if self.index_get > self.index_put:
+                self.index_get = max(min_idx+1, self.index_get)
+                if self.index_get >= self.size:
+                    self.index_get -= self.size
+            self.index_put = min_idx
+            if self.index_put == self.size:
+                self.index_put = 0
+                self.wrapped = True
+                if self.index_get == 0:
+                    self.index_get = 1
+
+    def putc(self, value):
+        next_index = (self.index_put + 1) % self.size
+        self.data[self.index_put] = value
+        self.index_put = next_index
+        # check for overflow
+        if self.index_get == self.index_put:
+            self.index_get = (self.index_get + 1) % self.size
+        return value
+
+    def get(self, numbytes):
+        data = bytearray()
+        while len(data) < numbytes:
+            start = self.index_get
+            min_idx = min(self.index_get+numbytes-len(data), self.size)
+            if self.index_put >= self.index_get:
+                min_idx = min(min_idx, self.index_put)
+            data.extend(self.data[start:min_idx])
+            self.index_get = min_idx
+            if self.index_get == self.size:
+                self.index_get = 0
+            if self.index_get == self.index_put:
+                break
+        return data
+
+    def getc(self):
+        if not self.has_data():
+            return None  ## buffer empty
+        else:
+            value = self.data[self.index_get]
+            self.index_get = (self.index_get + 1) % self.size
+            return value
+
+    def has_data(self):
+        return self.index_get != self.index_put
+
+    def rewind(self):
+        if self.wrapped:
+            self.index_get = (self.index_put+1) % self.size
+        else:
+            self.index_get = 0
 
 def UART(config):
     config = dict(config)
@@ -59,6 +125,12 @@ class Bridge:
         self.bind_port = self.address[1]
         self.client = None
         self.client_address = None
+        self.ring_buffer = RINGBUFFER(16 * 1024)
+        self.cur_line = bytearray()
+        self.state = 'listening'
+        self.uart = UART(self.config['uart'])
+        print('UART opened ', self.uart)
+        print(self.config)
 
     def bind(self):
         tcp = socket.socket()
@@ -125,6 +197,8 @@ class Bridge:
                             if self.password.decode('utf-8') == self.config['auth']['password']:
                                 self.sendall(self.client, "\r\nAuthentication succeeded\r\n")
                                 self.state = 'authenticated'
+                                self.ring_buffer.rewind()
+                                fd = self.uart # Send all uart data
                                 break
                             else:
                                 self.password = b""
@@ -138,15 +212,15 @@ class Bridge:
             else:
                 print('Client ', self.client_address, ' disconnected')
                 self.close_client()
-        elif fd == self.uart:
+        if fd == self.uart:
             data = self.uart.read()
             if data is not None:
-                if self.state == 'authenticated':
-                    print('UART({0})->TCP({1}) {2}'.format(self.uart_port,
-                                                           self.bind_port, data))
-                    self.sendall(self.client, data)
-                else:
-                    print("Ignoring UART data, not authenticated")
+                self.ring_buffer.put(data)
+            if self.state == 'authenticated' and self.ring_buffer.has_data():
+                data = self.ring_buffer.get(4096)
+                print('UART({0})->TCP({1}) {2}'.format(self.uart_port,
+                                                       self.bind_port, data))
+                self.sendall(self.client, data)
 
     def close_client(self):
         if self.client is not None:
@@ -154,14 +228,11 @@ class Bridge:
             self.client.close()
             self.client = None
             self.client_address = None
-        if self.uart is not None:
-#            self.uart.deinit()
-            self.uart = None
+        self.state = 'listening'
 
     def open_client(self):
         self.client, self.client_address = self.tcp.accept()
         print('Accepted connection from ', self.client_address)
-        self.uart = UART(self.config['uart'])
         if 'ssl' in self.config:
             import ussl
             import ubinascii
@@ -174,8 +245,6 @@ class Bridge:
             # TODO: Setting CERT_REQUIRED produces MBEDTLS_ERR_X509_CERT_VERIFY_FAILED
             sslconf['cert_reqs'] = ussl.CERT_OPTIONAL
             self.client = ussl.wrap_socket(self.client, server_side=True, **sslconf)
-        print('UART opened ', self.uart)
-        print(self.config)
         self.state = 'enterpassword' if 'auth' in self.config else 'authenticated'
         self.password = b""
         if self.state == 'enterpassword':
