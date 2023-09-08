@@ -192,13 +192,13 @@ That's all folks! Unless you want SSL:
 You can test the connection via openssl's s\_client:
 
 ```bash
-$ openssl s_client -connect rn102-picow:8000 -cert client.pem -CAfile server.crt
+$ openssl s_client -connect <MCU CN>:8000 -cert client.pem -CAfile server.crt
 ```
 
 But to get a proper tty, use socat:
 
 ```bash
-$ socat pty,link=$HOME/dev/ttyV0,b9600,waitslave tcp:<MCU CN>:8000,cert=client.pem,cafile=server.crt
+$ socat pty,link=$HOME/dev/ttyV0,b9600,waitslave OPENSSL-CONNECT:<MCU CN>:8000,cert=client.pem,cafile=server.crt
 ```
 
 Then use miniterm.py or screen as before.
