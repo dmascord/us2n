@@ -1,3 +1,4 @@
+
 # us2n.py
 
 import json
@@ -206,9 +207,22 @@ class Bridge:
                         else:
                                 self.password += c
                 if self.state == 'authenticated':
-                    print('TCP({0})->UART({1}) {2}'.format(self.bind_port,
+                    if data == b"\xff\xf3": #break
+                        self.uart.sendbreak()
+                        print('sending Break signal')
+                    elif data == b"\xff\xf6": #ayt are you there?
+                        self.sendall(self.client,"\r\nI'm here\r\n")
+                    else:
+                        print('TCP({0})->UART({1}) {2}'.format(self.bind_port,
                                                            self.uart_port, data))
-                    self.uart.write(data)
+                        self.uart.write(data)
+
+                if self.state == 'inMenu':
+                    #TODO menu for changing uart parameters :)
+
+                    #once changed we come back to authenticated state
+                    self.state = 'authenticated'
+            
             else:
                 print('Client ', self.client_address, ' disconnected')
                 self.close_client()
@@ -386,7 +400,7 @@ def WLANAccessPoint(config, name):
             print('Failed to activate wifi access point after {0}ms. ' \
                   'I give up'.format(t))
             return ap
-            
+
     print('Wifi {0!r} connected as {1}'.format(ap.config('essid'),
                                                ap.ifconfig()))
     return ap
