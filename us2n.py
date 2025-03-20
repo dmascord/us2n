@@ -370,12 +370,11 @@ def WLANAccessPoint(config, name):
         return
     config.setdefault('essid', name)
     config.setdefault('channel', 11)
-    config.setdefault('authmode',
-                      getattr(network,'AUTH_' +
-                              config.get('authmode', 'OPEN').upper()))
+    config.setdefault('authmode', getattr(network,'AUTH_OPEN'))
     config.setdefault('hidden', False)
-#    config.setdefault('dhcp_hostname', name)
     ap = network.WLAN(network.AP_IF)
+    ap.config(**config)
+    
     if not ap.isconnected():
         ap.active(True)
         n, ms = 20, 250
@@ -387,8 +386,7 @@ def WLANAccessPoint(config, name):
             print('Failed to activate wifi access point after {0}ms. ' \
                   'I give up'.format(t))
             return ap
-
-#    ap.config(**config)
+            
     print('Wifi {0!r} connected as {1}'.format(ap.config('essid'),
                                                ap.ifconfig()))
     return ap
