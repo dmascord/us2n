@@ -1,4 +1,3 @@
-
 # us2n.py
 
 import json
@@ -7,6 +6,7 @@ import select
 import socket
 import machine
 import network
+import sys
 
 print_ = print
 VERBOSE = 1
@@ -129,6 +129,7 @@ class Bridge:
         self.ring_buffer = RINGBUFFER(16 * 1024)
         self.cur_line = bytearray()
         self.state = 'listening'
+        self.menu_state = 'main'
         self.uart = UART(self.config['uart'])
         print('UART opened ', self.uart)
         print(self.config)
@@ -207,22 +208,172 @@ class Bridge:
                         else:
                                 self.password += c
                 if self.state == 'authenticated':
+                    
                     if data == b"\xff\xf3": #break
                         self.uart.sendbreak()
                         print('sending Break signal')
-                    elif data == b"\xff\xf6": #ayt are you there?
+                    elif data == b"\xff\xf6": #ayt
                         self.sendall(self.client,"\r\nI'm here\r\n")
+                    elif data == b"\xff\xf4": #IP: interrupt process comes to a menu, maybe changing in future.
+                        self.state = "inMenu"
+                        self.menu_state = 'main'
+                        data=''
                     else:
                         print('TCP({0})->UART({1}) {2}'.format(self.bind_port,
                                                            self.uart_port, data))
                         self.uart.write(data)
 
                 if self.state == 'inMenu':
-                    #TODO menu for changing uart parameters :)
+                    #menu for changing uart parameters :)
+                    main_options = {b'a':'databits', b'b':'baudrate', b'c':'parity', b'd':'stop', b'e':'close'}
+                    databit_options = { b'a':7, b'b':8, b'c':'main'}
+                    baud_options={b'a':4800, b'b':9600, b'c':19200, b'd':38400, b'e':57600, b'f':115200, b'z':'main'}
+                    parity_options={b'a':'None', b'b':"Even", b'c':"Odd", b'd':'main'}
+                    stop_options = { b'a':1, b'b':2, b'c':'main'}
+                    
+                    def menutrace():
+                        print('self state: {0}, self.menustate: {1}, current config: {2} {3} {4}, curr vel: {5}, termdata: {6}'.format(self.state,self.menu_state,str(self.config['uart']['bits']),str(self.config['uart']['parity']),str(self.config['uart']['stop']),str(self.config['uart']['baudrate']),data))
+                    
+                    def mainMenu():
+                        menutrace()
+                        self.sendall(self.client,b'\033[2J'+
+                            "UART parameters menu:\r\n"+
+                            "a) Data bits: "+ str(self.config['uart']['bits'])+"\r\n"+
+                            "b) Baudrate: " + str(self.config['uart']['baudrate'])+"\r\n"+
+                            "c) Parity: " + str(self.config['uart']['parity'])+"\r\n"+
+                            "d) stop bits:" + str(self.config['uart']['stop'])+"\r\n"+
+                            "e) exit\r\n"+
+                            "please select an option: ")
+                        
+                    def dataBitMenu():
+                        menutrace()
+                        self.sendall(self.client,b'\033[2J'+
+                            "databits parameters menu:\r\n"+
+                            "actual -> "+str(self.config['uart']['bits'])+"\r\n"+
+                            "a) 7 \r\n"+
+                            "b) 8 \r\n"+
+                            "c) exit\r\n"+
+                            "please select an option: ")
+                        
+                    def baudMenu():
+                        menutrace()
+                        self.sendall(self.client,b'\033[2J'+
+                            "baudrate parameters menu:\r\n"+
+                            "actual -> "+str(self.config['uart']['baudrate'])+"\r\n"+
+                            "a) 4800 \r\n"+
+                            "b) 9600 \r\n"+
+                            "c) 19200 \r\n"+
+                            "d) 38400\r\n"+
+                            "e) 57600\r\n"+
+                            "z) exit"+
+                            "please select an option: ")
 
-                    #once changed we come back to authenticated state
-                    self.state = 'authenticated'
-            
+                    def parityMenu():
+                        menutrace()
+                        self.sendall(self.client,b'\033[2J'+
+                            "parity parameters menu:\r\n"+
+                            "actual -> "+str(self.config['uart']['parity'])+"\r\n"+
+                            "a) None \r\n"+
+                            "b) Even \r\n"+
+                            "c) Odd \r\n"+
+                            "d) exit\r\n"+
+                            "please select an option: ")
+
+                    def stopMenu():
+                        menutrace()
+                        self.sendall(self.client,b'\033[2J'+
+                            "stop bit parameters menu:\r\n"+
+                            "actual -> "+str(self.config['uart']['stop'])+"\r\n"+
+                            "a) 1 \r\n"+
+                            "b) 2 \r\n"+
+                            "c) exit\r\n"+
+                            "please select an option: ")    
+                        
+                    if self.menu_state=='main':
+                        if data==b'':
+                            mainMenu()
+                        else:
+                            try:
+                                self.menu_state = main_options[data]
+                                data=b''
+                            except:
+                                mainMenu() 
+
+                    if self.menu_state=='databits':
+                        if data==b'':
+                            dataBitMenu()
+                        else:
+                            try:
+                                if databit_options[data] != 'main':
+                                    self.config['uart']['bits']=databit_options[data]
+                                    dataBitMenu()
+                                else:
+                                    self.menu_state=databit_options[data]
+                                    mainMenu()
+                            except:
+                                dataBitMenu()
+
+                    if self.menu_state=='baudrate':
+                        if data==b'':
+                            baudMenu()
+                        else:
+                            try:
+                                if baud_options[data] != 'main':
+                                    self.config['uart']['baudrate']=baud_options[data]
+                                    baudMenu()
+                                else:
+                                    self.menu_state=baud_options[data]
+                                    mainMenu()
+                            except:
+                                baudMenu()
+
+                    if self.menu_state=='parity':
+                        if data==b'':
+                            parityMenu()
+                        else:
+                            try:
+                                if parity_options[data] != 'main':
+                                    self.config['uart']['parity']=parity_options[data]
+                                    parityMenu()
+                                else:
+                                    self.menu_state=parity_options[data]
+                                    mainMenu()
+                            except:
+                                parityMenu()
+                    
+                    if self.menu_state=='stop':
+                        if data==b'':
+                            stopMenu()
+                        else:
+                            try:
+                                if stop_options[data] != 'main':
+                                    self.config['uart']['stop']=stop_options[data]
+                                    stopMenu()
+                                else:
+                                    self.menu_state=databit_options[data]
+                                    mainMenu()
+                            except:
+                                stopMenu()        
+                    
+                    if self.menu_state=='close':
+                        menutrace()
+                        self.sendall(self.client,b'\033[2J')
+                        #if new changes, save new data to config file
+                        with open('us2n.json','r') as f:
+                            excnf=json.loads(f.read())
+                        for item in excnf['bridges']:
+                            if item not in self.config:
+                                print("found a new configuration {0}, resetting...".format(item))
+                                with open('us2n.json','w') as f:
+                                    excnf['bridges']=self.config
+                                    json.dump(excnf,f)
+                                #reset uart
+                                #here is a problem i cant debug, making a soft reset
+                                sys.exit()
+                        #if not changes where made we go back to terminal.                        
+                        self.menu_state = 'main'
+                        self.state = 'authenticated'
+                        data=b''
             else:
                 print('Client ', self.client_address, ' disconnected')
                 self.close_client()
@@ -387,9 +538,9 @@ def WLANAccessPoint(config, name):
     config.setdefault('authmode', getattr(network,'AUTH_OPEN'))
     config.setdefault('hidden', False)
     ap = network.WLAN(network.AP_IF)
-    ap.config(**config)
     
     if not ap.isconnected():
+        ap.config(**config)
         ap.active(True)
         n, ms = 20, 250
         t = n * ms
@@ -415,7 +566,7 @@ def config_verbosity(config):
     global VERBOSE
     VERBOSE = config.setdefault('verbose', 1)
     for bridge in config.get('bridges'):
-        if bridge.get('uart', {}).get('port', None) == 0:
+        if bridge.get('uart',{}).get('port',None)==0:
             VERBOSE = 0
 
 
